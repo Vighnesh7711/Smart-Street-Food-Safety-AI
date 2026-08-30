@@ -1,165 +1,261 @@
 # Smart Street Food Safety AI
 
-AI-assisted ingredient analysis, hygiene monitoring, multilingual safety guidance, and QR-based transparency for street food vendors and consumers.
+AI-based ingredient analysis, explainable food-safety guidance, and vendor hygiene monitoring for street food vendors and consumers. Software-only web/mobile platform.
 
 ## Project Status
 
-Pre-development / planning stage. This repository describes the proposed system before implementation.
+Project report stage, August 2026. This is a software-only system. There is no hardware component in this design.
 
-Two variants are planned:
+## Abstract
 
-- **Software only** — a smartphone or web app for analyzing product labels and stall images. This is the intended MVP.
-- **Software + hardware** — adds an ESP32-CAM for automatic periodic stall image capture, to be built after the MVP is validated.
+Street food vendors and consumers often find it difficult to understand ingredient labels, food-safety practices, and hygiene information. This platform lets a vendor create a stall profile, photograph a packaged product's label, and receive an explainable, risk-oriented recommendation in their preferred language, generated from a curated food-safety knowledge base rather than a plain safe/unsafe guess.
 
-## Problem
+A second module lets vendors record hygiene conditions through a checklist and periodic stall photographs. Computer vision is used only as supporting visual evidence, not as proof of microbiological safety. A hygiene score is calculated from checklist compliance, visual evidence, verified inspections, and moderated consumer feedback.
 
-Street food vendors often use packaged ingredients without fully understanding ingredient names, additives, or whether a product suits their intended use. Language and technical terminology make labels hard to read. Consumers, in turn, want more transparency about stall hygiene.
+Every registered stall gets a QR code. Consumers scan it to see the stall's public hygiene profile and can submit feedback or report a concern, which an authorized food-safety or municipal officer can review and verify.
 
-This project turns complex product and hygiene information into simple, actionable guidance.
+The system is an assistive decision-support platform. It does not replace statutory food inspection or laboratory testing.
 
-## Who Uses It
+## Problem Statement
 
-**Vendor**
-- Registers and enters stall/business details.
-- Adds food items and products.
-- Scans product labels to understand ingredients and get suitability guidance.
-- Runs hygiene checks and views hygiene history.
-- Gets a QR code for their stall.
+Street food vendors may use packaged ingredients without understanding their composition, additives, allergen information, or suitability for a specific dish. Consumers have limited visibility into a stall's hygiene practices. Official inspection systems are important but do not give every vendor continuous, simple, multilingual guidance.
 
-**Consumer**
-- Scans a stall's QR code.
-- Views permitted hygiene and vendor information.
-- Leaves feedback or reports a hygiene concern.
+The system needs to:
 
-**Authorized Reviewer** (future)
-- Reviews reports and records verification outcomes.
-- Supports official food-safety workflows without replacing official inspection.
+- Read and interpret packaged-food ingredient labels from photographs.
+- Provide evidence-based, explainable guidance in the vendor's preferred language.
+- Recommend alternatives when a verified alternative exists.
+- Help vendors record periodic hygiene conditions.
+- Generate a transparent, non-authoritative hygiene score.
+- Expose verified information through a stall-specific QR code.
+- Let consumers submit feedback and reports.
+- Help authorities prioritize cases that need verification.
 
-## Core Features
+## Out of Scope
 
-**Product scanning** — Vendor photographs a product label. The image passes a quality check, then goes through OCR to extract ingredient text.
+- Laboratory testing of food samples.
+- Certifying a product as legally safe from an image alone.
+- Replacing FSSAI, municipal, or other statutory inspections.
+- Detecting microorganisms from ordinary photographs.
+- Medical or nutritional diagnosis.
 
-**Explainable results** — The system does not give a plain yes/no. It explains what was detected, what it means, why it might be a concern, and whether an alternative product is available.
+## User Roles
 
-**Multilingual support** — English, Marathi, and Hindi at launch, with more Indian languages planned.
+**Vendor** — Registers the stall, records food items and products, scans labels, completes hygiene checks, and receives guidance.
 
-**Hygiene monitoring** — Stall images are analyzed for indicators such as working-area cleanliness, visible waste, storage organization, and preparation-area condition. Final indicators will be defined after dataset collection.
+**Consumer** — Scans the stall's QR code, views the public profile, gives feedback, and reports concerns.
 
-**Image coverage validation** — The system checks that submitted images actually cover the required areas (working area, preparation area, storage, waste disposal) rather than accepting a single clean corner.
+**Authority** — Reviews flagged cases, performs verification, and records official observations.
 
-**QR transparency** — Each stall gets a unique QR code linking to its hygiene information and a feedback/report form.
+**Administrator** — Maintains the system, the food-safety knowledge base, supported languages, users, and audit logs.
 
-**Feedback integrity** — Ratings can be manipulated (e.g., a vendor asking many people for 5-star reviews). The system applies rate limiting, duplicate detection, and suspicious-activity checks, and keeps raw feedback separate from verified hygiene status.
+## Core Modules
 
-**Privacy handling** — Images may contain faces or other sensitive details. Captured images go through detection and blurring of sensitive regions before further processing, and raw image storage is minimized.
+1. Authentication and role management
+2. Vendor/stall profile management
+3. Food-category and product management
+4. Product label capture and OCR
+5. Ingredient extraction and normalization
+6. Food-safety rule/knowledge-base engine
+7. Explainable recommendation engine
+8. Multilingual translation layer
+9. Hygiene checklist
+10. Stall image quality and visual hygiene analysis
+11. Hygiene scoring engine
+12. QR code generation and public stall profile
+13. Consumer feedback and reporting
+14. Authority verification workflow
+15. Notifications and audit logs
 
-## System Architecture
+## How Product Analysis Works
 
-**Software-only version**
+The vendor photographs the back of a packaged product. The system checks image quality, runs OCR, extracts the ingredient list, normalizes the ingredient names, and compares them against the verified knowledge base.
 
-Vendor uses their smartphone for both product photos and stall photos. Images go to a backend for OCR/AI processing, results are stored, and a dashboard shows hygiene status behind a QR code for consumers.
+Rather than a plain "unsafe" label, the decision engine returns one of three categories:
 
-Advantages: lower cost, faster to build, no extra hardware.
-Limitation: vendor has to manually capture images.
+- **Verified concern** — an authoritative rule explicitly flags the ingredient or product for the defined use case.
+- **Needs review** — OCR is uncertain, the ingredient is ambiguous, or the knowledge base lacks sufficient evidence.
+- **No flagged concern** — no rule in the configured knowledge base is triggered.
 
-**Software + ESP32-CAM version**
+This keeps the system from presenting an uncertain AI prediction as a legal or scientific fact.
 
-An ESP32-CAM automatically captures stall images on a schedule and sends them over Wi-Fi to the backend, where the same hygiene AI processes them. The ESP32-CAM itself just handles capture, buffering, and upload; heavy AI inference stays on the backend.
+## How Hygiene Monitoring Works
 
-Advantages: automatic monitoring, less manual effort.
-Limitations: hardware cost, power and Wi-Fi dependency, camera placement, and maintenance.
+**Self-check** — The vendor completes a short checklist in their selected language, covering working-surface cleanliness, food covering, separation of raw and ready-to-eat items, waste management, utensil cleanliness, hand hygiene, ingredient storage, and water/ice handling.
+
+**Image verification** — The vendor uploads photographs of the preparation area, storage area, waste area, and serving/display area. An image-quality check rejects photos that are too close, dark, blurred, or narrowly framed, and asks for another image.
+
+**Visual hygiene AI** — A lightweight object detector looks for visible evidence such as uncovered food, visible waste, cleaning equipment, or cluttered surfaces. This is treated as supporting evidence only, never as proof of microbiological cleanliness.
+
+**Hygiene score** — Calculated as:
+
+```
+H = wc·C + wv·V + wf·F + wa·A
+```
+
+Where C is checklist compliance, V is visual-evidence score, F is moderated consumer feedback, A is authority verification, and the weights (wc, wv, wf, wa) are configurable and documented, so that a large volume of reviews cannot override verified inspection evidence.
+
+**Adaptive check interval** — The self-check frequency depends on risk level, recent verified status, and report activity, not on the vendor directly. A low-risk vendor with consistent verified evidence may get a longer interval; a recently flagged vendor gets a shorter one.
+
+## QR-Based Transparency
+
+Each stall gets a unique QR code. Its public profile shows only information meant to be public — no personal contact details, private photographs, or internal authority notes.
+
+## Consumer Feedback Integrity
+
+To reduce coordinated or fake reviews, the system considers account age, repeated reviews from the same account or device, abnormal review bursts, verified QR scans, reviewer diversity, similarity between review texts, and authority verification. No single factor proves fraud on its own — suspicious activity is flagged for moderation rather than acted on automatically.
+
+## Core Algorithms
+
+1. **OCR and ingredient extraction** — capture, orientation/perspective correction, denoise and contrast improvement, OCR, ingredient-section detection, normalization, and confidence scoring; uncertain tokens go to manual confirmation.
+2. **Ingredient knowledge-base matching** — each normalized ingredient is matched against rules specifying category, applicable use, concern type, evidence source, recommended action, alternative, and multilingual explanation.
+3. **Explainable recommendation** — retrieves matching rules, ranks them by authority and relevance, generates a structured decision with evidence and confidence, then translates the explanation. A generative model, if used, may only paraphrase retrieved evidence — never invent regulatory claims.
+4. **Image quality and framing check** — scores scene coverage, blur, illumination/contrast, and framing completeness; below a threshold, the system requests another image.
+5. **Consumer feedback trust score** — evaluates the factors listed above to flag suspicious feedback patterns for moderation.
 
 ## AI/ML Components
 
-- **OCR** — converts product label images into text.
-- **Ingredient NLP** — extracts and normalizes ingredient names from OCR text.
-- **Knowledge-based decision engine** — matches ingredients against defined rules and the intended food application.
-- **Computer vision** — detects visible hygiene indicators in stall images.
-- **Explainable AI layer** — turns technical analysis into plain-language explanations.
-- **Multilingual NLP** — produces explanations in the vendor's preferred language.
+| Component | Purpose |
+|---|---|
+| OCR | Extract text from ingredient labels |
+| OpenCV | Crop, denoise, threshold, correct perspective, check image quality |
+| YOLO (optional) | Detect visible hygiene-related conditions in stall photos |
+| Rule engine | Make grounded ingredient and hygiene decisions |
+| NLP/NER | Identify ingredient names and label entities |
+| Translation model/API | Convert verified explanations into the vendor's language |
+| LLM (optional) | Produce explanations strictly grounded in retrieved evidence |
 
-Exact models will be selected after experimentation; none are finalized yet.
+A rule engine is used for safety decisions rather than a purely learned classifier, because a learned model can produce plausible but unsupported predictions, and food-safety guidance needs to be traceable. The pipeline separates AI perception from verified knowledge and explanation, rather than going straight from image to answer.
 
-## Proposed Technology Stack
+## System Architecture
 
-**Frontend:** React/Next.js, with a native Android app if needed
-**Backend:** Python, FastAPI
-**Database:** PostgreSQL
-**AI/ML:** Python, OpenCV, an OCR engine, PyTorch or TensorFlow, a YOLO-family model for visual detection tasks
-**Hardware (optional variant):** ESP32-CAM, Wi-Fi, appropriate power supply, optional local storage
+1. **Presentation layer** — React.js/Next.js responsive web app or PWA.
+2. **Application layer** — FastAPI/Node.js APIs, authentication, vendor workflows, reporting, score calculation.
+3. **AI layer** — OpenCV preprocessing, OCR, ingredient extraction, computer vision, grounded explanation.
+4. **Knowledge layer** — curated ingredient rules, product categories, regulatory references, alternatives, multilingual explanations.
+5. **Data layer** — PostgreSQL for structured data, object storage for images.
+6. **Authority layer** — moderation and verification dashboard.
 
-This stack is a starting point and may change during development.
+## Technology Stack
+
+- **Frontend:** React.js / Next.js, responsive PWA
+- **Backend:** FastAPI (Python)
+- **Database:** PostgreSQL
+- **Object storage:** S3-compatible or cloud object storage
+- **OCR:** PaddleOCR or Tesseract
+- **Image processing:** OpenCV
+- **Computer vision:** YOLO-family model on a limited custom hygiene dataset
+- **Authentication:** JWT/session-based, role-based access control
+- **QR generation:** standard QR-code library
+- **Deployment:** Docker and a cloud platform
 
 ## Database Overview
 
-Planned core entities: `users`, `vendors`, `stalls`, `food_items`, `products`, `ingredients`, `product_ingredients`, `ingredient_rules`, `recommendations`, `hygiene_checks`, `hygiene_indicators`, `hygiene_scores`, `stall_images`, `qr_codes`, `consumer_feedback`, `reports`, `verification_records`, `audit_logs`.
+Main entities: `users`, `stalls`, `foods`, `products`, `ingredients`, `rules`, `alternatives`, `hygiene_checks`, `hygiene_images`, `feedback`, `reports`, `verifications`, `audit_logs`.
 
-Each vendor owns a stall, which has food items, products (with ingredients), hygiene checks, a QR code, and consumer feedback/reports.
+## Requirements Summary
+
+**Functional** — vendor registration and stall profile, food category and product management, label capture with image-quality validation, OCR extraction, ingredient normalization and knowledge-base matching, recommendation and explanation generation in the selected language, hygiene checklist and scoring with visible component breakdown, unique QR code per stall, public stall profile for consumers, feedback and reporting, authority review and verification, and an audit history for score and verification changes.
+
+**Non-functional** — simple, local-language usability; interactive-time performance for OCR and recommendations; authenticated and encrypted access; privacy-conscious handling of images (blurring faces where feasible); every recommendation traceable to a rule or evidence source; retryable uploads; independently extensible rules, languages, and locations; auditability of important changes.
 
 ## Repository Structure
 
 ```
-smart-street-food-safety-ai/
-├── README.md
-├── docs/
-│   ├── architecture/
-│   ├── algorithms/
-│   ├── database/
-│   ├── api/
-│   └── research/
+street-food-safety/
 ├── frontend/
-│   ├── web/
-│   └── mobile/
+│   └── src/
+│       ├── components/
+│       ├── pages/
+│       ├── features/
+│       │   ├── vendor/
+│       │   ├── consumer/
+│       │   ├── authority/
+│       │   ├── product-scan/
+│       │   └── hygiene/
+│       ├── services/
+│       ├── hooks/
+│       └── i18n/
 ├── backend/
-│   ├── api/
-│   ├── models/
-│   ├── services/
-│   └── database/
+│   └── app/
+│       ├── api/
+│       ├── models/
+│       ├── schemas/
+│       ├── services/
+│       │   ├── ocr/
+│       │   ├── vision/
+│       │   ├── rules/
+│       │   ├── explanation/
+│       │   ├── translation/
+│       │   └── scoring/
+│       ├── database/
+│       ├── security/
+│       └── workers/
 ├── ai/
 │   ├── ocr/
-│   ├── ingredient_analysis/
+│   ├── ingredient_ner/
 │   ├── hygiene_detection/
-│   ├── explainability/
-│   └── multilingual/
-├── hardware/
-│   └── esp32_cam/
-├── datasets/
-│   └── README.md
+│   └── datasets/
+├── training/
+├── knowledge_base/
+│   ├── ingredients/
+│   ├── rules/
+│   ├── alternatives/
+│   └── translations/
 ├── tests/
-└── scripts/
+├── docker/
+└── docs/
 ```
 
-## Development Roadmap
+## Testing Plan
 
-1. **MVP** — Vendor registration, product image capture, OCR, ingredient extraction, knowledge base matching, and multilingual explanation.
-2. **Hygiene monitoring** — Stall image validation, computer vision analysis, hygiene scoring.
-3. **QR and consumer flow** — QR generation, consumer-facing stall page, feedback and reporting.
-4. **Trust and verification** — Fraud detection, report moderation, verification workflow, audit history.
-5. **ESP32-CAM integration** — Automatic capture, Wi-Fi upload, backend processing.
+Testing proceeds module by module before the full workflow: authentication, OCR, ingredient extraction, rule matching, explanation generation, translation, image quality, hygiene detection, hygiene scoring, QR retrieval, feedback moderation, authority workflow, and finally end-to-end validation. Metrics include accuracy, precision/recall, mAP for visual detection, latency, and audit completeness. No performance numbers are claimed until testing is actually carried out.
 
-The plan is to build the smallest reliable version first, validate it with real data, and add automation and hardware afterward.
+## Security, Privacy, and Ethical Considerations
+
+- Images with faces are detected and blurred before cloud processing where practical.
+- Only information necessary for the stated purpose is collected.
+- Vendor location is public only to the precision the use case requires.
+- Consumer identity is not unnecessarily exposed to vendors.
+- Important changes to hygiene scores and verification status are auditable.
+- Reports do not immediately reduce a vendor's score without a trust/moderation step.
+- Coordinated reviews are flagged, not automatically treated as fact.
+- AI recommendations clearly state when evidence is insufficient.
+- The system distinguishes an "AI-assisted advisory result" from an "official inspection result."
 
 ## Known Limitations
 
-**Product analysis:** OCR can fail on poor-quality images; ingredient names may have synonyms not yet in the knowledge base; results depend on the intended food application.
-
-**Hygiene AI:** Images cannot capture every hygiene condition; hidden contamination may go undetected; lighting and camera angle affect accuracy; false positives and false negatives are possible.
-
-**Feedback:** Ratings can be manipulated and false reports are possible; community feedback is not a substitute for official inspection.
-
-**Hardware:** Camera placement, Wi-Fi reliability, and power supply all affect the ESP32-CAM variant's monitoring coverage.
-
-No performance numbers should be claimed until testing has actually been carried out.
+- OCR can fail due to glare, curved packaging, low resolution, stylized fonts, or multilingual labels, and can produce incorrect ingredient names.
+- The knowledge base may not cover every ingredient or product formulation, and stored product information needs updating as formulations change.
+- Visual hygiene detection is limited to what's visible in a photo and cannot prove microbiological safety.
+- Consumer feedback can be manipulated.
+- QR codes can be copied unless tied to a verifiable stall identity.
+- Multilingual translation can introduce ambiguity if not validated.
+- The system cannot replace statutory food-safety inspections or laboratory testing.
 
 ## Future Scope
 
-Voice-based assistance, additional Indian languages, offline OCR and knowledge base, improved recommendation models, advanced hygiene computer vision, automatic video-based inspection, environmental sensors, integration with official food-safety workflows, randomized verification, stronger feedback-fraud detection, vendor improvement recommendations, historical analytics, and edge AI deployment.
+- Integration with official food-business registration and verification systems where permitted.
+- Integration of authoritative food-product and regulatory databases.
+- Barcode/QR product lookup before OCR.
+- Offline OCR and multilingual assistance for low-connectivity areas.
+- Voice-based guidance for vendors with limited literacy.
+- More Indian languages and regional dialect support.
+- Automatic change detection between consecutive stall photographs.
+- Privacy-preserving or federated learning for hygiene models.
+- Authority mobile application for inspection and verification.
+- Predictive risk prioritization for authorities.
+- Integration with certified training resources for food handlers.
 
-## Project Vision
+## Conclusion
 
-The project connects two goals:
+The Smart Street Food Safety and Hygiene Assistant is a practical software platform for improving day-to-day food-safety awareness among street food vendors while increasing transparency for consumers. It combines ingredient-label OCR, a verified knowledge base, explainable multilingual guidance, hygiene self-checks, visual evidence, QR-based public profiles, moderated consumer feedback, and authority verification into one workflow. It is deliberately an assistive platform: AI reduces the knowledge and language barrier, it does not replace scientific testing or statutory inspection.
 
-- Turning complicated ingredient information into a simple explanation the vendor can act on.
-- Turning stall conditions into a hygiene indicator that a consumer can see through a QR code.
+## References
 
-The aim is to make food safety information understandable and actionable for vendors, while giving consumers real transparency.
+1. Food Safety and Standards Authority of India (FSSAI), Hygiene Rating Scheme.
+2. FSSAI, Clean Street Food Hub, Eat Right India initiative.
+3. FSSAI, Food Safety and Standards (Labelling and Display) Regulations, 2020.
+4. Pushkar, K., Bhatt, G., Verma, M., Goel, S., Singh, A., "Conformance of the food vendor carts design to the prescribed standards as per food safety and standards regulations: Assessment from an urban area of North India," Indian Journal of Public Health, 2022.
+5. Redmon, J., Divvala, S., Girshick, R., Farhadi, A., "You Only Look Once: Unified, Real-Time Object Detection," CVPR.
+6. Smith, R., "An Overview of the Tesseract OCR Engine," ICDAR.
