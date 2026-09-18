@@ -58,21 +58,14 @@ Required values in `backend/.env`:
 |---|---|
 | `JWT_SECRET_KEY` | `openssl rand -hex 32` |
 | `DATABASE_URL` | Your PostgreSQL connection string |
-| `GOOGLE_APPLICATION_CREDENTIALS` | GCP service-account JSON key path — **OCR only** |
+| `GOOGLE_API_KEY` | Google AI Studio or Google Cloud API Key for Gemini |
 
-Enable **Cloud Vision API** on that project. The **Cloud Translation API is not
-needed**: translation runs locally (see "Local translation" below), so no
-Google credential is involved in translating anything. `GOOGLE_CLOUD_PROJECT`
-is still declared but no longer read by the code. Every other variable is
-optional and documented inline in `.env.example`.
+The project now relies **exclusively on Google Gemini 3.6 Flash** for all AI capabilities:
+- **OCR (Label Scanning):** Replaces Google Cloud Vision.
+- **Computer Vision (Hygiene Checks):** Replaces the OpenCV heuristics and YOLOv8n models. Gemini uses spatial understanding to detect hygiene issues and output bounding boxes.
+- **Translation:** Replaces the local AI4Bharat IndicTrans2 model, vastly simplifying setup and deployment footprint.
 
-> **OCR choice.** Label OCR uses **Google Cloud Vision**. PaddleOCR — the
-> obvious pick for Devanagari — cannot be installed here at all: its
-> `paddlepaddle` engine publishes no wheel for Python 3.14. Tesseract would
-> need an unmanaged system binary plus `hin`/`mar` traineddata. Vision needs
-> no system dependency and has the strongest Devanagari accuracy. The
-> tradeoff is that OCR requires network access and a billing-enabled project.
-> Translation carries no such tradeoff any more.
+You do NOT need `GOOGLE_APPLICATION_CREDENTIALS` or a heavy local `pytorch` environment. Simply configure your `GOOGLE_API_KEY`.
 
 Create the schema and load the knowledge bases:
 
@@ -81,38 +74,6 @@ Create the schema and load the knowledge bases:
 ./venv/Scripts/python.exe -m app.seeds.ingredients_seed   # product scan
 ./venv/Scripts/python.exe -m app.seeds.hygiene_seed       # hygiene indicators
 ```
-
-### 1b. Local translation model (one-time)
-
-Translation runs a local AI4Bharat IndicTrans2 model — no API key, no quota,
-no billing, and label text never leaves the machine. The weights are a
-one-time ~1.1 GB download:
-
-1. Sign in and click **Agree and access repository** at
-   <https://huggingface.co/ai4bharat/indictrans2-en-indic-dist-200M>. The repo
-   is gated, so signing in is not enough on its own — without this step the
-   download fails with a `403 GatedRepoError`.
-
-2. From `backend/`:
-
-```bash
-venv/Scripts/hf.exe auth login
-
-venv/Scripts/hf.exe download ai4bharat/indictrans2-en-indic-dist-200M \
-  --local-dir var/models/indictrans2-en-indic-dist-200M \
-  --include "*.json" "*.py" "model.safetensors" "model.SRC" "model.TGT" \
-            "LICENSE" "README.md"
-```
-
-Do **not** fetch `pytorch_model.bin` (a 1.1 GB duplicate of
-`model.safetensors`). Do **not** skip `model.SRC` / `model.TGT` — despite the
-names they are the SentencePiece protos the tokenizer loads, and translation
-fails without them.
-
-Afterwards set `TRANSLATION_OFFLINE=true` to guarantee no network access. The
-app works fully offline from then on. Full detail, including the pinned
-`transformers` version and why it must not be bumped, is in
-[`backend/docs/translation.md`](backend/docs/translation.md).
 
 Run the API:
 
@@ -253,14 +214,14 @@ frontend/src/
 image bytes
   → image-quality gate        OpenCV, local, runs first so bad photos
                               never reach the paid OCR call
-  → OCR                       Google Cloud Vision
+  → OCR                       Google Gemini 3.6 Flash
   → ingredient-section slice  finds the declaration, drops the nutrition table
   → normalize + parse         NFC, casefold, Devanagari-safe, INS/E numbers
   → knowledge-base match      exact → whole-word containment → fuzzy typo recovery
   → rule evaluation           presence / threshold / category restriction
   → confidence + status       5 statuses, explicit precedence table
   → English explanation       canonical, stored on the row
-  → translation               local IndicTrans2, vendor's preferred_language,
+  → translation               Google Gemini 3.6 Flash, vendor's preferred_language,
                               cached, with graceful fallback to English
 ```
 
@@ -325,36 +286,13 @@ Scores are written to `hygiene_scores` with a `formula_version` and are never
 rewritten in place, so changing the weights creates a comparable new row
 rather than silently restating history.
 
-### ⚠️ The detector is a placeholder
+### 🧠 Gemini Vision Detector
 
-**There is no purpose-trained hygiene model yet.** `CV_PROVIDER=heuristic`
-(the default) uses deterministic OpenCV signals — edge density for clutter,
-bounded smooth regions with specular glints for standing water, long dark
-uniform lines for drains. It needs no model file, is fully reproducible, and
-is tuned conservatively so a **clean stall produces zero findings**.
+The CV provider uses **Google Gemini 3.6 Flash** to perform hygiene detection (`CV_PROVIDER=gemini`). It is prompted to find specific indicators (waste, pets, raw meat) and return JSON containing bounding box coordinates and object labels.
 
-`CV_PROVIDER=onnx_yolo` runs a YOLO-family model instead. Until you fine-tune
-one, it uses YOLOv8n pretrained on COCO — whose 80 classes contain **no
-hygiene indicators**. Mapping a detected `cup` onto `visible_waste` gives the
-pipeline real detections to score; it is not a hygiene model, and its
-precision on a real stall is unknown. The mapping is visible data
-(`hygiene_indicators.cv_labels`), not buried in code.
+If you don't configure an API key, it defaults to the `heuristic` provider (OpenCV algorithms looking for edges/dark spots). 
 
-To use it:
-
-```bash
-# In a SEPARATE environment -- this needs ultralytics (~2.5 GB of torch)
-python -m venv .venv-export && .venv-export/Scripts/pip install ultralytics
-.venv-export/Scripts/python backend/scripts/export_yolov8_onnx.py
-
-# Then in backend/.env
-CV_PROVIDER=onnx_yolo
-CV_MODEL_PATH=var/models/yolov8n.onnx
-```
-
-The backend never downloads weights itself. Swapping in a fine-tuned model
-means re-running that export and updating the `cv_labels` seed — nothing
-outside `integrations/cv_client.py` and the seed changes.
+> Note: The previous YOLOv8 `onnx_yolo` provider is deprecated and removed from the active dependencies, in favour of a zero-footprint LLM-based spatial understanding architecture.
 
 ### Coverage and integrity
 
