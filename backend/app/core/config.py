@@ -28,12 +28,18 @@ class Settings(BaseSettings):
     # Not read by this codebase any more. Kept so existing deployments do not
     # fail validation and because the Cloud project is still meaningful
     # operationally for Vision's billing/enablement.
+    GOOGLE_APPLICATION_CREDENTIALS: Optional[str] = None
+    # Not read by this codebase any more. Kept so existing deployments do not
+    # fail validation and because the Cloud project is still meaningful
+    # operationally for Vision's billing/enablement.
     GOOGLE_CLOUD_PROJECT: Optional[str] = None
+    
+    # Unified Gemini API Key
+    GOOGLE_API_KEY: Optional[str] = None
 
     # --- OCR ---
-    # Swap point for integrations/ocr_client.py. Only "google_vision" is
-    # implemented; the setting exists so a provider swap is config-only.
-    OCR_PROVIDER: str = "google_vision"
+    # Swap point for integrations/ocr_client.py. Now defaults to "gemini".
+    OCR_PROVIDER: str = "gemini"
     # Labels are photographed, not scanned flat, so we ask Vision for dense
     # document text rather than sparse scene text. See ocr_client for detail.
     OCR_TIMEOUT_SECONDS: float = 30.0
@@ -63,10 +69,9 @@ class Settings(BaseSettings):
     # --- Translation (local, no Google credentials) ---
     # Kill switch / latency control for the translation step.
     SCAN_TRANSLATION_ENABLED: bool = True
-    # Provider swap point for integrations/translate_client.py. Only
-    # "indictrans2" is implemented; the setting exists so a swap is
-    # config-only, matching OCR_PROVIDER and CV_PROVIDER.
-    TRANSLATION_PROVIDER: str = "indictrans2"
+    # Provider swap point for integrations/translate_client.py. Now defaults to
+    # "gemini".
+    TRANSLATION_PROVIDER: str = "gemini"
 
     # Weights. `TRANSLATION_MODEL_DIR` wins when it exists, so a downloaded
     # model runs with no network at all; otherwise `TRANSLATION_MODEL` is
@@ -106,13 +111,17 @@ class Settings(BaseSettings):
     # can actually reach -- not the API host and not localhost in production.
     PUBLIC_APP_URL: str = "http://localhost:3000"
 
+    # --- Auth Integrations ---
+    GOOGLE_CLIENT_ID: Optional[str] = None
+    DIGILOCKER_CLIENT_ID: Optional[str] = None
+    DIGILOCKER_CLIENT_SECRET: Optional[str] = None
+
     # --- Computer vision (hygiene) ---
     # Provider swap point for integrations/cv_client.py:
-    #   "heuristic" -- deterministic OpenCV signals, needs no model file
-    #                  and works on a fresh clone. The default.
-    #   "onnx_yolo" -- YOLO-family inference via onnxruntime. Requires
-    #                  CV_MODEL_PATH to point at an exported .onnx file.
-    CV_PROVIDER: str = "heuristic"
+    #   "gemini" -- unified Gemini AI for vision. The default.
+    #   "heuristic" -- deterministic OpenCV signals
+    #   "onnx_yolo" -- YOLO-family inference via onnxruntime
+    CV_PROVIDER: str = "gemini"
     # Path to the exported ONNX model. Relative paths resolve against
     # backend/. The app never downloads this itself -- see
     # scripts/export_yolov8_onnx.py.

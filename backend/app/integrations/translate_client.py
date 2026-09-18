@@ -41,6 +41,7 @@ from typing import Callable, Dict, Iterable, List, Optional
 from app.core.config import settings
 from app.integrations import indic_text
 from app.integrations.indictrans2 import IndicTrans2Runtime
+from google import genai
 
 logger = logging.getLogger(__name__)
 
@@ -141,8 +142,6 @@ def _run_indictrans2(texts: List[str], target_language: str) -> List[str]:
     """Translate via the local model. Raises on any real failure."""
     tag = indic_text.tag_for(target_language)
     if tag is None:
-        # Callers screen for this first, so reaching here means the supported
-        # set changed underneath us. Fail loudly rather than guessing a tag.
         raise ValueError(
             f"No IndicTrans2 tag maps to language {target_language!r}. "
             f"Add it to indic_text.APP_TO_TAG."
@@ -150,8 +149,43 @@ def _run_indictrans2(texts: List[str], target_language: str) -> List[str]:
     return get_runtime().translate_batch(texts, tag)
 
 
+def _run_gemini(texts: List[str], target_language: str) -> List[str]:
+    """Translate via Gemini API."""
+    if not settings.GOOGLE_API_KEY:
+        raise ValueError("GOOGLE_API_KEY must be set for Gemini translation.")
+    
+    client = genai.Client(api_key=settings.GOOGLE_API_KEY)
+    
+    results = []
+    # Note: For better throughput, we could run these concurrently using threads or async.
+    from tenacity import retry, stop_after_attempt, wait_exponential
+    
+    @retry(
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        reraise=True
+    )
+    def _call_api(prompt_text):
+        return client.models.generate_content(
+            model='gemini-3.6-flash',
+            contents=prompt_text,
+        )
+
+    for text in texts:
+        prompt = (
+            f"Translate the following text to {target_language}. "
+            "Return ONLY the translated text, with no explanations, markdown formatting, or original text. "
+            f"Text to translate:\n\n{text}"
+        )
+        response = _call_api(prompt)
+        results.append(response.text.strip())
+        
+    return results
+
+
 _PROVIDERS: Dict[str, Callable[[List[str], str], List[str]]] = {
     "indictrans2": _run_indictrans2,
+    "gemini": _run_gemini,
 }
 
 

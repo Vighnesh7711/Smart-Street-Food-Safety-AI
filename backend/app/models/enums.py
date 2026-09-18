@@ -26,6 +26,12 @@ class UserRole(str, enum.Enum):
         return {cls.VENDOR, cls.CONSUMER}
 
 
+class AuthProvider(str, enum.Enum):
+    LOCAL = "local"
+    GOOGLE = "google"
+    DIGILOCKER = "digilocker"
+
+
 class ScanStatus(str, enum.Enum):
     """The five product-scan outcomes.
 
@@ -199,6 +205,7 @@ class DetectionSource(str, enum.Enum):
 
     HEURISTIC = "heuristic"
     ONNX_YOLO = "onnx_yolo"
+    GEMINI = "gemini"
 
 
 class FlagStatus(str, enum.Enum):

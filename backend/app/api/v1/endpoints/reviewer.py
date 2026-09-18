@@ -26,6 +26,8 @@ from app.schemas.reviewer import (
     VendorDetailRead,
     VendorListResponse,
     VendorRowRead,
+    AuditLogListResponse,
+    AnalyticsListResponse,
 )
 from app.services.reviewer import service as reviewer_service
 from app.services.reviewer.service import ReviewerError
@@ -220,3 +222,69 @@ def resolve_flag(
         resolved_at=flag.resolved_at,
         resolution_note=flag.resolution_note,
     )
+
+
+@router.get(
+    "/audit",
+    response_model=AuditLogListResponse,
+    summary="Reviewer audit trail",
+)
+def list_audit_logs(
+    db: Session = Depends(get_db),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+):
+    from app.models.audit_log import AuditLog
+    total = db.query(AuditLog).count()
+    logs = db.query(AuditLog).order_by(AuditLog.created_at.desc()).offset(skip).limit(limit).all()
+    
+    items = []
+    for log in logs:
+        items.append(
+            schemas.reviewer.AuditLogRead(
+                id=log.id,
+                action=log.action,
+                actor_id=log.actor_id,
+                actor_name=log.actor.full_name if log.actor else None,
+                target_type=log.target_type,
+                target_id=log.target_id,
+                details=log.details,
+                created_at=log.created_at,
+            )
+        )
+    return schemas.reviewer.AuditLogListResponse(items=items, total=total, skip=skip, limit=limit)
+
+
+@router.get(
+    "/analytics",
+    response_model=AnalyticsListResponse,
+    summary="Reviewer analytics aggregates",
+)
+def get_analytics(
+    db: Session = Depends(get_db),
+    days: int = Query(30, ge=1, le=365),
+):
+    from app.models.analytics import AnalyticsAggregate
+    from datetime import date, timedelta
+    
+    start_date = date.today() - timedelta(days=days)
+    records = db.query(AnalyticsAggregate).filter(
+        AnalyticsAggregate.date >= start_date
+    ).order_by(AnalyticsAggregate.date.asc()).all()
+    
+    items = []
+    for r in records:
+        items.append(
+            schemas.reviewer.AnalyticsAggregateRead(
+                date=r.date,
+                total_stalls=r.total_stalls,
+                assessed_stalls=r.assessed_stalls,
+                flagged_stalls=r.flagged_stalls,
+                average_score=r.average_score,
+                scans_performed=r.scans_performed,
+                flags_created=r.flags_created,
+                flags_resolved=r.flags_resolved,
+                checks_performed=r.checks_performed,
+            )
+        )
+    return schemas.reviewer.AnalyticsListResponse(items=items)

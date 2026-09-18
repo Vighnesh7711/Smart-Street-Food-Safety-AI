@@ -370,6 +370,64 @@ def upload_view_image(
     refreshed = crud_hygiene.get_check(db, check_id)
     return _check_read(db, refreshed or check)
 
+from pydantic import BaseModel
+
+class HygieneImageJSON(BaseModel):
+    view_category: ViewCategory
+    file_base64: str
+
+@router.post(
+    "/checks/{check_id}/images-json",
+    response_model=HygieneCheckRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="Upload one view photo (JSON Base64)",
+)
+def upload_view_image_json(
+    check_id: int,
+    payload: HygieneImageJSON,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.VENDOR)),
+) -> HygieneCheckRead:
+    try:
+        check = hygiene_service.resolve_check(db, check_id, current_user)
+    except HygieneError as exc:
+        raise _http_error(exc) from exc
+
+    import base64
+    data = payload.file_base64
+    if "," in data:
+        data = data.split(",", 1)[1]
+    
+    try:
+        image_bytes = base64.b64decode(data)
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail="Invalid base64 image data"
+        )
+        
+    if len(image_bytes) > _MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail={
+                "detail": "That image is too large. Please retake at a smaller size.",
+                "retryable": False,
+            },
+        )
+
+    try:
+        hygiene_service.add_view_image(
+            db,
+            check=check,
+            view=payload.view_category,
+            image_bytes=image_bytes,
+        )
+    except HygieneError as exc:
+        raise _http_error(exc) from exc
+
+    refreshed = crud_hygiene.get_check(db, check_id)
+    return _check_read(db, refreshed or check)
+
 
 @router.post(
     "/checks/{check_id}/checklist",

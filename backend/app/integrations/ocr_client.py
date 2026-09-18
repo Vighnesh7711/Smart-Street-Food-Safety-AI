@@ -189,8 +189,61 @@ def _run_google_vision(image_bytes: bytes) -> OcrResult:
     )
 
 
+def _run_gemini(image_bytes: bytes) -> OcrResult:
+    from google import genai
+    from google.genai import types
+
+    if not settings.GOOGLE_API_KEY:
+        raise OcrError(
+            "Gemini API key missing",
+            "Label reading is not configured correctly. Please contact support.",
+            retryable=False,
+        )
+    
+    try:
+        from tenacity import retry, stop_after_attempt, wait_exponential
+        from google.genai.errors import APIError
+
+        client = genai.Client(api_key=settings.GOOGLE_API_KEY)
+        
+        @retry(
+            stop=stop_after_attempt(5),
+            wait=wait_exponential(multiplier=1, min=2, max=10),
+            reraise=True
+        )
+        def _call_api():
+            return client.models.generate_content(
+                model='gemini-3.6-flash',
+                contents=[
+                    types.Part.from_bytes(data=image_bytes, mime_type='image/jpeg'),
+                    "Extract all visible text from this product label verbatim. Return ONLY the extracted text with no other explanations, markdown formatting, or tags."
+                ]
+            )
+            
+        response = _call_api()
+        text = response.text.strip()
+        word_count = len(text.split())
+        
+        # Gemini does not provide per-word confidence. We pass None so the downstream
+        # pipeline uses its heuristic image-quality-based fallback.
+        return OcrResult(
+            text=text,
+            confidence=None,
+            word_count=word_count,
+            engine="gemini",
+        )
+    except Exception as exc:
+        logger.error("Gemini OCR failed: %s", exc)
+        raise OcrError(
+            f"Gemini API Error: {exc}",
+            "Could not read the label right now. Please try again.",
+            retryable=True,
+        ) from exc
+
+
 _PROVIDERS = {
     "google_vision": _run_google_vision,
+    "gemini": _run_gemini,
 }
 
 

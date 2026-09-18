@@ -13,6 +13,9 @@ from app.models.stall_image import StallImage
 from app.models.hygiene_score import HygieneScore
 from app.models.qr_code import QrCode
 from app.models.flag import Flag
+from app.models.consumer_report import ConsumerReport
+from app.models.audit_log import AuditLog
+from app.models.analytics import AnalyticsAggregate
 
 # Re-exported so `from app.db.base import Base` is enough for Alembic's
 # autogenerate to see every table.
@@ -34,4 +37,7 @@ __all__ = [
     "HygieneScore",
     "QrCode",
     "Flag",
+    "ConsumerReport",
+    "AuditLog",
+    "AnalyticsAggregate",
 ]

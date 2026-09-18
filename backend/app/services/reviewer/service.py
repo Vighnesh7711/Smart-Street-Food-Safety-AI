@@ -17,6 +17,7 @@ from app.models.product_ingredient import ProductIngredient
 from app.models.stall import Stall
 from app.models.stall_image import StallImage
 from app.models.user import User
+from app.models.audit_log import AuditLog
 from app.schemas.reviewer import (
     DetectedIndicatorRead,
     FlagRead,
@@ -62,6 +63,17 @@ def create_flag(
         created_by_user_id=user.id,
     )
     db.add(flag)
+    
+    # Audit log
+    audit = AuditLog(
+        action="flag_created",
+        actor_id=user.id,
+        target_type="stall",
+        target_id=stall.id,
+        details={"reason": reason.strip()}
+    )
+    db.add(audit)
+    
     db.commit()
     db.refresh(flag)
     return flag
@@ -86,6 +98,17 @@ def resolve_flag(
     flag.resolved_by_user_id = user.id
     flag.resolved_at = sa.func.now()
     flag.resolution_note = (note or "").strip() or None
+    
+    # Audit log
+    audit = AuditLog(
+        action="flag_resolved",
+        actor_id=user.id,
+        target_type="flag",
+        target_id=flag.id,
+        details={"stall_id": flag.stall_id, "resolution_note": flag.resolution_note}
+    )
+    db.add(audit)
+    
     db.commit()
     db.refresh(flag)
     return flag

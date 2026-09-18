@@ -189,5 +189,39 @@ class FlagListResponse(BaseModel):
     limit: int
 
 
+class AuditLogRead(BaseModel):
+    id: int
+    action: str
+    actor_id: int
+    actor_name: Optional[str] = None
+    target_type: str
+    target_id: int
+    details: Optional[Dict] = None
+    created_at: datetime
+
+
+class AuditLogListResponse(BaseModel):
+    items: List[AuditLogRead] = Field(default_factory=list)
+    total: int
+    skip: int
+    limit: int
+
+
+class AnalyticsAggregateRead(BaseModel):
+    date: datetime
+    total_stalls: int
+    assessed_stalls: int
+    flagged_stalls: int
+    average_score: Optional[float] = None
+    scans_performed: int
+    flags_created: int
+    flags_resolved: int
+    checks_performed: int
+
+
+class AnalyticsListResponse(BaseModel):
+    items: List[AnalyticsAggregateRead] = Field(default_factory=list)
+
+
 # Resolve the forward reference in VendorDetailRead.
 VendorDetailRead.model_rebuild()

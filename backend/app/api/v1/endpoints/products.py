@@ -146,6 +146,62 @@ def scan_product_label(
 
     return _to_read(outcome.product, outcome.recommendations)
 
+from pydantic import BaseModel
+
+class ScanRequestJSON(BaseModel):
+    stall_id: int
+    file_base64: str
+    language: Optional[str] = None
+
+@router.post(
+    "/scan-json",
+    response_model=ScanResultRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="Scan a product label photo (JSON Base64)",
+)
+def scan_product_label_json(
+    payload: ScanRequestJSON,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.VENDOR)),
+) -> ScanResultRead:
+    import base64
+    stall = _resolve_scan_stall(db, payload.stall_id, current_user)
+
+    data = payload.file_base64
+    if "," in data:
+        data = data.split(",", 1)[1]
+
+    try:
+        image_bytes = base64.b64decode(data)
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid base64 image data",
+        )
+
+    if len(image_bytes) > _MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail="That image is too large. Please retake at a smaller size.",
+        )
+
+    try:
+        outcome = scan_service.scan_label(
+            db,
+            stall=stall,
+            user=current_user,
+            image_bytes=image_bytes,
+            target_language=payload.language,
+        )
+    except scan_service.ScanError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"detail": exc.user_message, "retryable": exc.retryable},
+        ) from exc
+
+    return _to_read(outcome.product, outcome.recommendations)
+
+
 
 @router.get(
     "/scans",

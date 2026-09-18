@@ -102,3 +102,43 @@ def get_by_code(db: Session, code: str) -> Optional[PublicStallProfile]:
     if stall is None:
         return None
     return build_profile(db, stall)
+
+
+from app.models.consumer_report import ConsumerReport
+from app.schemas.public import PublicStallLocation, ConsumerReportCreate
+
+def list_stalls_for_map(db: Session) -> list[PublicStallLocation]:
+    """Get all stalls that have a location and an active QR code, mapped for the consumer dashboard."""
+    locations = []
+    # We only want stalls with latitude and longitude
+    stalls = db.query(Stall).filter(Stall.latitude.isnot(None), Stall.longitude.isnot(None)).all()
+    for stall in stalls:
+        qr_code = stall.qr_code_id
+        if qr_code:
+            hygiene = _latest_hygiene(db, stall.id)
+            locations.append(
+                PublicStallLocation(
+                    stall_name=stall.name,
+                    latitude=stall.latitude,
+                    longitude=stall.longitude,
+                    code=qr_code,
+                    score=hygiene.score if hygiene else None,
+                    band=hygiene.band if hygiene else None,
+                )
+            )
+    return locations
+
+def create_consumer_report(db: Session, code: str, report_in: ConsumerReportCreate) -> bool:
+    """Create a consumer report for a stall. Returns True if successful, False if stall not found."""
+    stall = crud_qr_code.get_stall_by_code(db, code)
+    if not stall:
+        return False
+    
+    report = ConsumerReport(
+        stall_id=stall.id,
+        category=report_in.category,
+        notes=report_in.notes
+    )
+    db.add(report)
+    db.commit()
+    return True

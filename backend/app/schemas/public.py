@@ -17,9 +17,6 @@ WHAT IS DELIBERATELY ABSENT, AND WHY
 ------------------------------------
 Vendor name / phone / email / user_id  -- the spec forbids contact info, and
     it is the difference between "a stall" and "a named person".
-Address, latitude, longitude           -- not requested. A consumer is
-    standing at the stall, so it adds nothing for them, but it adds a great
-    deal for someone scraping a registry.
 stall_id, vendor_id                    -- internal identifiers. Publishing
     them would restore enumeration by the back door, defeating the whole
     reason the URL carries a random code.
@@ -85,3 +82,18 @@ class PublicStallProfile(BaseModel):
     disclaimer: str = Field(default=DISCLAIMER)
     """Returned in the payload, not just rendered as page copy, so a client
     cannot present a score as a certification by simply not rendering it."""
+
+
+class PublicStallLocation(BaseModel):
+    """Information returned for the public consumer map."""
+    stall_name: str
+    latitude: float
+    longitude: float
+    code: str
+    score: Optional[float] = None
+    band: Optional[str] = None
+
+
+class ConsumerReportCreate(BaseModel):
+    category: str = Field(..., max_length=50)
+    notes: Optional[str] = None

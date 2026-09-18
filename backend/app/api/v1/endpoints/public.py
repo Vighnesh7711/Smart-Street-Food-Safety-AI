@@ -58,3 +58,38 @@ def read_public_stall(
 
     response.headers["Cache-Control"] = f"public, max-age={_PUBLIC_CACHE_SECONDS}"
     return profile
+
+
+from app.schemas.public import PublicStallLocation, ConsumerReportCreate
+
+@router.get(
+    "/stalls",
+    response_model=list[PublicStallLocation],
+    summary="List of stalls for the consumer map",
+)
+def list_public_stalls(
+    response: Response,
+    db: Session = Depends(get_db),
+) -> list[PublicStallLocation]:
+    """Returns all stalls that have coordinates and active QR codes."""
+    locations = public_service.list_stalls_for_map(db)
+    response.headers["Cache-Control"] = f"public, max-age={_PUBLIC_CACHE_SECONDS}"
+    return locations
+
+@router.post(
+    "/stalls/{code}/report",
+    summary="Submit a consumer concern report",
+    status_code=status.HTTP_201_CREATED
+)
+def create_report(
+    code: str,
+    report_in: ConsumerReportCreate,
+    db: Session = Depends(get_db),
+):
+    """Allows consumers to report a concern about a stall."""
+    success = public_service.create_consumer_report(db, code, report_in)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=_NOT_FOUND_DETAIL
+        )
+    return {"message": "Report submitted successfully."}

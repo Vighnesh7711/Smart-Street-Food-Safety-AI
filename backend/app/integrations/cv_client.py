@@ -759,6 +759,111 @@ class OnnxYoloProvider:
 
 
 # ---------------------------------------------------------------------------
+# Gemini Provider
+# ---------------------------------------------------------------------------
+
+
+class GeminiProvider:
+    """Uses Google Gemini 1.5 Pro to analyze the image and return structured JSON."""
+    name = DetectionSource.GEMINI.value
+
+    def __init__(self, indicator_labels: Dict[str, str]):
+        self.indicator_labels = indicator_labels
+
+    def detect(self, image_bgr: np.ndarray, view: ViewCategory) -> CvResult:
+        from google import genai
+        from google.genai import types
+        import json
+
+        if not settings.GOOGLE_API_KEY:
+            raise CvError(
+                "Gemini API key missing",
+                "Hygiene photo checks are misconfigured.",
+                retryable=False,
+            )
+
+        client = genai.Client(api_key=settings.GOOGLE_API_KEY)
+        
+        success, encoded_image = cv2.imencode(".jpg", image_bgr)
+        if not success:
+            raise CvInferenceError("Failed to encode image", "Could not process the photo.")
+            
+        image_bytes = encoded_image.tobytes()
+        metrics = _coordinate_space_metrics(image_bgr)
+        width, height = metrics["image_width"], metrics["image_height"]
+        
+        prompt = (
+            f"Act as a food safety hygiene inspector. Look at this {view.value} view of a street food stall.\n"
+            "Analyze the image for hygiene indicators like visible waste, uncovered food, cluttered surfaces, dirty utensils, etc.\n"
+            "Return a JSON array of detections. For each detection, include:\n"
+            ' - "label": a short descriptive string (e.g., "visible_waste", "uncovered_food")\n'
+            ' - "confidence": a float between 0.0 and 1.0\n'
+            ' - "box_2d": [ymin, xmin, ymax, xmax] coordinates normalized between 0 and 1000. If no bounding box can be determined, omit this field.\n'
+            "Return ONLY the JSON array."
+        )
+
+        try:
+            from tenacity import retry, stop_after_attempt, wait_exponential
+            
+            @retry(
+                stop=stop_after_attempt(5),
+                wait=wait_exponential(multiplier=1, min=2, max=10),
+                reraise=True
+            )
+            def _call_api():
+                return client.models.generate_content(
+                    model='gemini-3.6-flash',
+                    contents=[
+                        types.Part.from_bytes(data=image_bytes, mime_type='image/jpeg'),
+                        prompt
+                    ],
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                    ),
+                )
+                
+            response = _call_api()
+            
+            detections_data = json.loads(response.text)
+            
+            detections = []
+            for d in detections_data:
+                raw_label = str(d.get("label", "")).lower()
+                mapped_label = self.indicator_labels.get(raw_label, raw_label)
+                    
+                box_2d = d.get("box_2d")
+                bbox = None
+                if isinstance(box_2d, list) and len(box_2d) == 4:
+                    ymin, xmin, ymax, xmax = box_2d
+                    x1 = int((xmin / 1000.0) * width)
+                    y1 = int((ymin / 1000.0) * height)
+                    x2 = int((xmax / 1000.0) * width)
+                    y2 = int((ymax / 1000.0) * height)
+                    bbox = (x1, y1, x2, y2)
+                    
+                detections.append(Detection(
+                    label=mapped_label,
+                    raw_label=f"gemini:{raw_label}",
+                    confidence=float(d.get("confidence", 0.9)),
+                    bbox=bbox,
+                    source=self.name
+                ))
+                
+            return CvResult(
+                detections=detections,
+                provider=self.name,
+                metrics=metrics
+            )
+        except Exception as exc:
+            logger.error("Gemini CV failed: %s", exc)
+            raise CvInferenceError(
+                f"Gemini CV failed: {exc}", 
+                "Could not analyze the photo right now. Please try again.",
+                retryable=True
+            ) from exc
+
+
+# ---------------------------------------------------------------------------
 # Dispatch
 # ---------------------------------------------------------------------------
 
@@ -778,8 +883,12 @@ def build_indicator_label_map(indicator_rows) -> Dict[str, str]:
 
 def get_provider(indicator_rows=None) -> CvProvider:
     """Resolve the configured provider."""
-    name = (settings.CV_PROVIDER or "heuristic").strip().lower()
+    name = (settings.CV_PROVIDER or "gemini").strip().lower()
 
+    if name == DetectionSource.GEMINI.value:
+        return GeminiProvider(
+            indicator_labels=build_indicator_label_map(indicator_rows or [])
+        )
     if name == DetectionSource.ONNX_YOLO.value:
         return OnnxYoloProvider(
             indicator_labels=build_indicator_label_map(indicator_rows or [])

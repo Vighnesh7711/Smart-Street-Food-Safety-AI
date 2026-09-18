@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Enum, Integer, String
 
 from app.db.base_class import Base
-from app.models.enums import UserRole
+from app.models.enums import UserRole, AuthProvider
 
 __all__ = ["User", "UserRole"]
 
@@ -11,7 +11,17 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True, nullable=False)
-    hashed_password = Column(String, nullable=False)
+    hashed_password = Column(String, nullable=True)
+    auth_provider = Column(
+        Enum(
+            AuthProvider,
+            name="authprovider",
+            values_callable=lambda enum_cls: [m.value for m in enum_cls],
+        ),
+        default=AuthProvider.LOCAL,
+        nullable=False,
+    )
+    provider_id = Column(String, nullable=True, unique=True, index=True)
     # values_callable makes Postgres store the enum *values* ("vendor",
     # "reviewer", ...) rather than SQLAlchemy's default of the member
     # *names* ("VENDOR"). The lowercase form matches the JSON API contract

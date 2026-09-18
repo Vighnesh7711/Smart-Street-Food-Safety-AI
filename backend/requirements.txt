@@ -14,12 +14,8 @@ python-dotenv==1.0.1
 # QR codes (Phase 3 renders these; qr_code_id minting is Phase 2)
 qrcode[pil]==7.4.2
 
-# Google Cloud integration -- OCR only.
-# Vision performs OCR (chosen over PaddleOCR, which publishes no cp314
-# wheel, and over Tesseract, which needs an unmanaged system binary).
-# Translation used to live here too; it is local now (see the IndicTrans2
-# block below), so no Google credential is needed to translate anything.
-google-cloud-vision==3.7.1
+# Unified Google Gemini SDK for OCR, Translation, and Vision.
+google-genai>=0.3.0
 
 # Local translation (Phase 6) -- replaces Google Cloud Translation.
 # No API key, no quota, no billing; label text never leaves the machine.

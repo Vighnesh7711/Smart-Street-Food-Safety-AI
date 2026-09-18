@@ -2,7 +2,7 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr
 
-from app.models.enums import UserRole
+from app.models.enums import UserRole, AuthProvider
 
 
 class UserBase(BaseModel):
@@ -14,6 +14,12 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     email: EmailStr
     password: str
+
+
+class UserCreateOAuth(UserBase):
+    email: EmailStr
+    auth_provider: AuthProvider
+    provider_id: str
 
 
 class UserUpdate(UserBase):
